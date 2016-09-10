@@ -62,6 +62,9 @@ DHT dht(DHTPIN, DHTTYPE);
 DHT dht2(DHTPIN2, DHTTYPE);
 
 
+#define FANPIN A0
+
+
 // initialize the library with the numbers of the interface pins
 LiquidCrystal lcd(7, 6, 5, 4, 3, 2);
 
@@ -86,16 +89,43 @@ double dewPoint(double celsius, double humidity)
 }
 
 
+int FSM_fan_control(float dewpointInterior, float dewpointExterior){
+  static int state=0;
+
+  switch (state){
+    case 0:
+      if ((dewpointInterior - dewpointExterior) >= 5){  
+        // switch fans on
+        state = 1;
+        digitalWrite(FANPIN, HIGH);
+      }
+      break;
+    case 1:
+      if ((dewpointInterior - dewpointExterior) < 2){
+        // switch fans off
+        state = 0;
+        digitalWrite(FANPIN, LOW);
+      }
+      break;
+  }
+  return state;
+}
+
 void measureAndProcess() {
   // set the cursor to column 0, line 1
   // (note: line 1 is the second row, since counting begins with 0):
   String dataString = "";
   String logString = "";
   bool errorDHT1;
+  bool errorDHT2;
   int retryCounter = 0;
   char charVal[12];
   float h;
   float t;
+  int stateFSM;
+
+  float dewpointInterior;
+  float dewpointExterior;
 
   while (retryCounter <= 9){
     delay(2000);
@@ -124,7 +154,8 @@ void measureAndProcess() {
   dataString += charVal;
   dataString += "% ";
 
-  dtostrf(dewPoint(t,h),3,0, charVal);
+  dewpointInterior = dewPoint(t,h);
+  dtostrf(dewpointInterior,3,0, charVal);
   dataString += charVal;
   dataString += " ";
 
@@ -146,6 +177,7 @@ void measureAndProcess() {
 
   lcd.setCursor(0, 1);
 
+  errorDHT2 = false;
   // Reading temperature or humidity takes about 250 milliseconds!
   // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
   h = dht2.readHumidity();
@@ -153,7 +185,7 @@ void measureAndProcess() {
   t = dht2.readTemperature();
 
   if (isnan(h) ||isnan(t)){
-    
+    errorDHT2 = true;
     lcd.print("dht11 error     ");
   }
 
@@ -166,7 +198,8 @@ void measureAndProcess() {
   dataString += charVal;
   dataString += "% ";
 
-  dtostrf(dewPoint(t,h),3,0, charVal);
+  dewpointExterior =  dewPoint(t,h);
+  dtostrf(dewpointExterior,3,0, charVal);
   dataString += charVal;
   dataString += " ";
   
@@ -178,10 +211,16 @@ void measureAndProcess() {
   logString += ", ";
   dtostrf(h, 6, 2, charVal);
   logString += charVal;
-
+  logString += ", ";
 
   
 
+
+  if (!(errorDHT1 || errorDHT2)){
+    stateFSM = FSM_fan_control(dewpointInterior, dewpointExterior);
+  }
+  
+  logString += String(stateFSM);
 
   // open the file. note that only one file can be open at a time,
   // so you have to close this one before opening another.
@@ -212,6 +251,9 @@ void setup() {
   lcd.print("card initialized.");
   dht.begin();
   dht2.begin();
+
+  pinMode(FANPIN, OUTPUT);
+  digitalWrite(FANPIN, LOW);
 
   Timer1.initialize();
   Timer1.attachInterrupt(measureAndProcess, 30 * 1000000);
