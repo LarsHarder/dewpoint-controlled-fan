@@ -49,7 +49,7 @@ DHT dht2(DHTPIN2, DHTTYPE);
 
 
 // initialize the library with the numbers of the interface pins
-LiquidCrystal lcd(7, 6, 5, 4, 3, 2);
+LiquidCrystal lcd(7, 6, 5, 4, 1, 0);
 
 
 /*
@@ -103,10 +103,7 @@ int FSM_fan_control(float dewpointInterior, float dewpointExterior){
 /*
     monolythic function to be split up...
  */
-
 void measureAndProcess() {
-  // set the cursor to column 0, line 1
-  // (note: line 1 is the second row, since counting begins with 0):
   String dataString = "";
   String logString = "";
   bool errorDHT1;
@@ -202,9 +199,6 @@ void measureAndProcess() {
   dtostrf(h, 6, 2, charVal);
   logString += charVal;
   logString += ", ";
-
-  
-
 
   if (!(errorDHT1 || errorDHT2)){
     stateFSM = FSM_fan_control(dewpointInterior, dewpointExterior);
