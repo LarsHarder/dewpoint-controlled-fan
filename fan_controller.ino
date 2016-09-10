@@ -1,44 +1,30 @@
 
 /*
-  LiquidCrystal Library - Hello World
 
- Demonstrates the use a 16x2 LCD display.  The LiquidCrystal
- library works with all LCD displays that are compatible with the
- Hitachi HD44780 driver. There are many of them out there, and you
- can usually tell them by the 16-pin interface.
+  fan controller based on dewpoint of outside and inside air
 
- This sketch prints "Hello World!" to the LCD
- and shows the time.
 
-  The circuit:
- * LCD RS pin to digital pin 12
- * LCD Enable pin to digital pin 11
- * LCD D4 pin to digital pin 5
- * LCD D5 pin to digital pin 4
- * LCD D6 pin to digital pin 3
- * LCD D7 pin to digital pin 2
- * LCD R/W pin to ground
- * LCD VSS pin to ground
- * LCD VCC pin to 5V
- * 10K resistor:
- * ends to +5V and ground
- * wiper to LCD VO pin (pin 3)
+  To reduce the humidity in a cellar two fans are installed to replace the damp air inside
+  with air from the outside. The fans only run when the outside air has a lower water-content
+  than the air inside.
 
- Library originally added 18 Apr 2008
- by David A. Mellis
- library modified 5 Jul 2009
- by Limor Fried (http://www.ladyada.net)
- example added 9 Jul 2009
- by Tom Igoe
- modified 22 Nov 2010
- by Tom Igoe
+  Hardware consists of an Arduino One clone, a LCD, a SD-Card Reader and two DHT11 Sensors.
+  
+  Project Page: tbd
+  Author:   Lars Harder
 
- This example code is in the public domain.
+  used libraries
+    LCD       https://www.arduino.cc/en/Reference/LiquidCrystal
+    DHT11     https://github.com/adafruit/DHT-sensor-library
+    TimerOne  http://playground.arduino.cc/Code/Timer1
+    SD        https://www.arduino.cc/en/Reference/SD
 
- http://www.arduino.cc/en/Tutorial/LiquidCrystal
- */
+  copied functions
+    Dewpoint  http://playground.arduino.cc/Main/DHT11Lib
 
-// include the library code:
+*/
+
+//for LCD
 #include <stdlib.h>
 #include <LiquidCrystal.h>
 
@@ -47,21 +33,18 @@
 #include <SD.h>
 const int chipSelect = 10;
 
-
 // for DHT11
 #include <DHT.h>
-
-
-#include <TimerOne.h>
-
-
 #define DHTTYPE DHT11
 #define DHTPIN 9
 #define DHTPIN2 8
 DHT dht(DHTPIN, DHTTYPE);
 DHT dht2(DHTPIN2, DHTTYPE);
 
+// for Timer
+#include <TimerOne.h>
 
+// for the fans
 #define FANPIN A0
 
 
@@ -69,7 +52,9 @@ DHT dht2(DHTPIN2, DHTTYPE);
 LiquidCrystal lcd(7, 6, 5, 4, 3, 2);
 
 
-
+/*
+ * copied from http://playground.arduino.cc/Main/DHT11Lib
+ */
 double dewPoint(double celsius, double humidity)
 {
   // (1) Saturation Vapor Pressure = ESGG(T)
@@ -88,7 +73,11 @@ double dewPoint(double celsius, double humidity)
   return (241.88 * T) / (17.558 - T);
 }
 
-
+/*
+    state machine to control the fans
+    If dewpoint of exterior is at least 5°C lower then the dewpoint of the inside fans are enabled (state = 1).
+    If dewpoint of exterior raises above 2°C lower the the dewpoint of the inside fans are disabled (state = 0).
+ */
 int FSM_fan_control(float dewpointInterior, float dewpointExterior){
   static int state=0;
 
@@ -111,6 +100,10 @@ int FSM_fan_control(float dewpointInterior, float dewpointExterior){
   return state;
 }
 
+/*
+    monolythic function to be split up...
+ */
+
 void measureAndProcess() {
   // set the cursor to column 0, line 1
   // (note: line 1 is the second row, since counting begins with 0):
@@ -130,13 +123,10 @@ void measureAndProcess() {
   while (retryCounter <= 9){
     delay(2000);
     errorDHT1 = false;
-    // Reading temperature or humidity takes about 250 milliseconds!
-    // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
     h = dht.readHumidity();
-    // Read temperature as Celsius (the default)
     t = dht.readTemperature();
 
-    
+    // check for error in reading DHT11
     if (isnan(h) ||isnan(t)){
       errorDHT1 = true;      
       lcd.setCursor(15,0);
@@ -245,16 +235,19 @@ void setup() {
   // see if the card is present and can be initialized:
   if (!SD.begin(chipSelect)) {
     lcd.print("SD Card failed");
-    // don't do anything more:
     return;
   }
   lcd.print("card initialized.");
+
+  // enable DHT11 sensors
   dht.begin();
   dht2.begin();
 
+  // enable FANPIN as output
   pinMode(FANPIN, OUTPUT);
   digitalWrite(FANPIN, LOW);
 
+  // setup timer for interrupt 
   Timer1.initialize();
   Timer1.attachInterrupt(measureAndProcess, 30 * 1000000);
 }
@@ -262,7 +255,5 @@ void setup() {
 
 
 void loop() {
-  // put your main code here, to run repeatedly:
-  //measureAndProcess();
-  //delay(5000);
+  // nothing to do here - everything is handled by timer-interrupt
 }
