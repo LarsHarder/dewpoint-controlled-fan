@@ -47,6 +47,11 @@ DHT dht2(DHTPIN2, DHTTYPE);
 // for the fans
 #define FANPIN A0
 
+// for accessing DS1337 RTC
+#include <Wire.h>
+#define DS1337ADDRESS 0b1101000
+
+#define INTPIN 2
 
 // initialize the library with the numbers of the interface pins
 LiquidCrystal lcd(7, 6, 5, 4, 1, 0);
@@ -74,6 +79,127 @@ double dewPoint(double celsius, double humidity)
   double T = log(VP/0.61078);   // temp var
   return (241.88 * T) / (17.558 - T);
 }
+
+
+void setTime(byte second, byte minute, byte hour, byte day, byte date, byte month, byte year){
+  byte errorcode;
+  Wire.beginTransmission(DS1337ADDRESS);
+  Wire.write( 0 ); // start write at 0 (register for seconds)
+  Wire.write(charToBCD(second));
+  Wire.write(charToBCD(minute));
+  Wire.write(charToBCD(hour));
+  Wire.write(charToBCD(day));
+  Wire.write(charToBCD(date));
+  Wire.write(charToBCD(month));
+  Wire.write(charToBCD(year));
+
+  errorcode = Wire.endTransmission();
+  if (errorcode != 0){
+    lcd.setCursor(0,1);
+    lcd.print("ERROR DS1337b:");
+    lcd.print(String(errorcode));    
+    return;
+  }
+}
+
+/*
+  convert a character of a number [0-9] to the corresponding byte-value
+  - does not check the input
+ */
+byte char2byte(char value){
+  return (value - '0');
+}
+
+/* 
+  read settime.txt from SD and set RTC - then delete settime.txt
+
+  Format in settime.txt
+  20161231-0-14:35:55
+  YYYYMMDD W HH mm SS
+  Y Year
+  M Month
+  D Day
+  W Weekday
+  H Hour
+  m Minute
+  S Second
+ */
+void setTimeFromSD(){
+  byte second, minute, hour, day, date, month, year;
+  char buffer[20];
+  File timefile;
+  timefile = SD.open("settime.txt", FILE_READ);
+  if (timefile){
+    timefile.read(buffer, 19);
+    year = char2byte(buffer[2]) * 10 + char2byte(buffer[3]);
+    month = char2byte(buffer[4]) * 10 + char2byte(buffer[5]);
+    date = char2byte(buffer[6]) * 10 + char2byte(buffer[7]);
+    day = char2byte(buffer[9]);
+    hour = char2byte(buffer[11]) * 10 + char2byte(buffer[12]);
+    minute = char2byte(buffer[14]) * 10 + char2byte(buffer[15]);
+    second = char2byte(buffer[17]) * 10 + char2byte(buffer[18]);
+    setTime(second, minute, hour, day, date, month, year);
+    timefile.close();
+    SD.remove("settime.txt");
+  }
+}
+
+
+/*
+  convert a value to BCD-encoding 
+  leads to wrong results if value > 99
+ */
+byte charToBCD(byte value){
+  byte firstDigit;
+  firstDigit = value/10;
+  value = value - (firstDigit * 10);
+  firstDigit <<= 4;
+  firstDigit += value;
+  return firstDigit;
+}
+
+
+
+/*
+  set Alarm 2 on DS1337 to ring once per minute
+ */
+void setAlarmOncePerMinute(){
+  byte errorcode;
+  // set Alarm registers (first bit of 0xBH to 0xDH) to 111 (alarm every minute)
+  Wire.beginTransmission(DS1337ADDRESS);
+  Wire.write( 0x0B ); // first register of Alarm2
+  Wire.write(0b10000000);
+  Wire.write(0b10000000);
+  Wire.write(0b10000000);
+  Wire.write(0b00000110); // enable alarm interrupt, set interrupt control
+  Wire.write(0);
+  errorcode = Wire.endTransmission();
+  if (errorcode != 0){
+    lcd.setCursor(0,1);
+    lcd.print("ERROR DS1337c:");
+    lcd.print(String(errorcode));    
+    return;
+  }
+}
+
+
+/*
+   clears the A2F Flag to aknowledge the alarm
+ */
+void resetAlarm(){
+  byte errorcode;
+  Wire.beginTransmission(DS1337ADDRESS);
+  Wire.write( 0x0F); // status register
+  Wire.write( 0 ); // reset alarm
+  errorcode = Wire.endTransmission();
+  if (errorcode != 0){
+    lcd.setCursor(0,1);
+    lcd.print("ERROR DS1337d:");
+    lcd.print(String(errorcode));    
+    return;
+  }
+}
+
 
 /*
     state machine to control the fans
@@ -223,7 +349,8 @@ void measureAndProcess() {
       lcd.print("SD error");
     }
   }
-  
+
+  resetAlarm();
 }
 
 void setup() {
@@ -245,9 +372,14 @@ void setup() {
   pinMode(FANPIN, OUTPUT);
   digitalWrite(FANPIN, LOW);
 
-  // setup timer for interrupt 
-  Timer1.initialize();
-  Timer1.attachInterrupt(measureAndProcess, 30 * 1000000);
+  // enable Interrupt on Pin 2
+  pinMode(INTPIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(INTPIN), measureAndProcess, FALLING);
+ 
+
+  Wire.begin();
+  setTimeFromSD();
+  setAlarmOncePerMinute();
 }
 
 
