@@ -42,7 +42,7 @@ DHT dht(DHTPIN, DHTTYPE);
 DHT dht2(DHTPIN2, DHTTYPE);
 
 // for Timer
-#include <TimerOne.h>
+//#include <TimerOne.h>
 
 // for the fans
 #define FANPIN A0
@@ -200,6 +200,72 @@ void resetAlarm(){
   }
 }
 
+void writeTimestampToSD(File datafile){
+  char datestring[23];
+  byte second, minute, hour, temp, date, month, year;
+  byte errorcode;
+
+
+  Wire.beginTransmission( DS1337ADDRESS );
+  Wire.write( 0 );
+  errorcode = Wire.endTransmission();
+  if (errorcode != 0){
+    //lcd.setCursor(0,1);
+    //lcd.print("ERROR DS1337:");
+    //lcd.print(String(errorcode));
+    //return;
+  }
+
+  
+
+  Wire.requestFrom(DS1337ADDRESS, 7);
+  second = Wire.read();
+  minute = Wire.read();
+  hour = Wire.read();
+  temp = Wire.read();  // ignore the day of week
+  date = Wire.read();
+  month = Wire.read();
+  year = Wire.read();
+  errorcode = Wire.endTransmission();
+
+  datestring[0]='2';
+  datestring[1]='0';
+  temp = year & 0b11110000;
+  temp >> 4;
+  datestring[2]= '0' + temp;
+  datestring[3]= '0' + ( year & 0b00001111);
+  datestring[4]= '-';
+  temp = month & 0b00010000;
+  temp >> 4;
+  datestring[5]= '0' + temp;
+  datestring[6]= '0' + ( month & 0b00001111);
+  datestring[7]= '-';
+  temp = date & 0b00110000;
+  temp >> 4;
+  datestring[8]= '0' + temp;
+  datestring[9]= '0' + ( date & 0b00001111);
+  datestring[10]= ' ';
+  temp = hour & 0b00110000;
+  temp >> 4;
+  datestring[11]= '0' + temp;
+  datestring[12]= '0' + ( hour & 0b00001111);
+  datestring[13]= ':';
+  temp = minute & 0b01110000;
+  temp >> 4;
+  datestring[14]= '0' + temp;
+  datestring[15]= '0' + ( minute & 0b00001111);
+  datestring[16]= ':';
+  temp = second & 0b01110000;
+  temp >> 4;
+  datestring[17]= '0' + temp;
+  datestring[18]= '0' + ( second & 0b00001111);
+  datestring[19]= ' ';
+  datestring[20]= ';';
+  datestring[21]= ' ';
+  datestring[22]= 0;
+  datafile.write(datestring);
+}
+
 
 /*
     state machine to control the fans
@@ -254,7 +320,6 @@ void measureAndProcess() {
     // check for error in reading DHT11
     if (isnan(h) ||isnan(t)){
       errorDHT1 = true;      
-      lcd.setCursor(15,0);
       retryCounter ++;
      } else break;
   }
@@ -284,7 +349,8 @@ void measureAndProcess() {
 
   lcd.setCursor(0,0);
   if (errorDHT1){
-    lcd.print("I dht11 error     ");  
+    //lcd.print("I dht11 error     ");  
+    lcd.print(dataString);
   } else {
     lcd.print(dataString);
   }
@@ -301,7 +367,7 @@ void measureAndProcess() {
 
   if (isnan(h) ||isnan(t)){
     errorDHT2 = true;
-    lcd.print("dht11 error     ");
+    //lcd.print("dht11 error     ");
   }
 
   dtostrf(t, 3, 0, charVal);
@@ -334,19 +400,20 @@ void measureAndProcess() {
   
   logString += String(stateFSM);
 
-  if (SD_present){
+  if (SD_present && !(errorDHT1 || errorDHT2)){
     // open the file. note that only one file can be open at a time,
     // so you have to close this one before opening another.
     File dataFile = SD.open("temphum.txt", FILE_WRITE);
 
     // if the file is available, write to it:
     if (dataFile) {
+      writeTimestampToSD(dataFile);
       dataFile.println(logString);
       dataFile.close();
     }
     // if the file isn't open, pop up an error:
     else {
-      lcd.print("SD error");
+      //lcd.print("SD error");
     }
   }
 
@@ -372,14 +439,21 @@ void setup() {
   pinMode(FANPIN, OUTPUT);
   digitalWrite(FANPIN, LOW);
 
-  // enable Interrupt on Pin 2
-  pinMode(INTPIN, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(INTPIN), measureAndProcess, FALLING);
- 
-
   Wire.begin();
   setTimeFromSD();
   setAlarmOncePerMinute();
+
+
+
+  lcd.setCursor(0,1);
+  lcd.write("Init complete");
+  delay(100);
+
+  // enable Interrupt on Pin 2
+  pinMode(INTPIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(INTPIN), measureAndProcess, FALLING);
+
+  lcd.write("!");
 }
 
 
