@@ -304,46 +304,44 @@ void measureAndProcess() {
   bool errorDHT2;
   int retryCounter = 0;
   char charVal[12];
-  float h;
-  float t;
+  float humidityInterior, humidityExterior;
+  float temperatureInterior, temperatureExterior;
+  float dewpointInterior, dewpointExterior;
   int stateFSM;
-
-  float dewpointInterior;
-  float dewpointExterior;
 
   while (retryCounter <= 9){
     delay(2000);
     errorDHT1 = false;
-    h = dht.readHumidity();
-    t = dht.readTemperature();
+    humidityInterior = dht.readHumidity();
+    temperatureInterior = dht.readTemperature();
 
     // check for error in reading DHT11
-    if (isnan(h) ||isnan(t)){
+    if (isnan(humidityInterior) ||isnan(temperatureInterior)){
       errorDHT1 = true;      
       retryCounter ++;
      } else break;
   }
 
   
-  dtostrf(t, 3, 0, charVal);
+  dtostrf(temperatureInterior, 3, 0, charVal);
   dataString = "I ";
   dataString += charVal;
   dataString +="C ";
 
-  dtostrf(h,3,0, charVal);
+  dtostrf(humidityInterior,3,0, charVal);
   dataString += charVal;
   dataString += "% ";
 
-  dewpointInterior = dewPoint(t,h);
+  dewpointInterior = dewPoint(temperatureInterior, humidityInterior);
   dtostrf(dewpointInterior,3,0, charVal);
   dataString += charVal;
   dataString += " ";
 
 
-  dtostrf(t, 6, 2, charVal);
+  dtostrf(temperatureInterior, 6, 2, charVal);
   logString += charVal;
   logString += ", ";
-  dtostrf(h, 6, 2, charVal);
+  dtostrf(humidityInterior, 6, 2, charVal);
   logString += charVal;
   logString += ", ";
 
@@ -361,36 +359,36 @@ void measureAndProcess() {
   errorDHT2 = false;
   // Reading temperature or humidity takes about 250 milliseconds!
   // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
-  h = dht2.readHumidity();
+  humidityExterior = dht2.readHumidity();
   // Read temperature as Celsius (the default)
-  t = dht2.readTemperature();
+  temperatureExterior = dht2.readTemperature();
 
-  if (isnan(h) ||isnan(t)){
+  if (isnan(humidityExterior) ||isnan(temperatureExterior)){
     errorDHT2 = true;
     //lcd.print("dht11 error     ");
   }
 
-  dtostrf(t, 3, 0, charVal);
+  dtostrf(temperatureExterior, 3, 0, charVal);
   dataString = "A ";
   dataString += charVal;
   dataString +="C ";
 
-  dtostrf(h,3,0, charVal);
+  dtostrf(humidityExterior, 3, 0, charVal);
   dataString += charVal;
   dataString += "% ";
 
-  dewpointExterior =  dewPoint(t,h);
-  dtostrf(dewpointExterior,3,0, charVal);
+  dewpointExterior =  dewPoint(temperatureExterior, humidityExterior);
+  dtostrf(dewpointExterior, 3, 0, charVal);
   dataString += charVal;
   dataString += " ";
   
   lcd.print(dataString);
 
   
-  dtostrf(t, 6, 2, charVal);
+  dtostrf(temperatureExterior, 6, 2, charVal);
   logString += charVal;
   logString += ", ";
-  dtostrf(h, 6, 2, charVal);
+  dtostrf(humidityExterior, 6, 2, charVal);
   logString += charVal;
   logString += ", ";
 
