@@ -52,6 +52,8 @@ DHT dht2(DHTPIN2, DHTTYPE);
 LiquidCrystal lcd(7, 6, 5, 4, 1, 0);
 
 
+bool SD_present=false;
+
 /*
  * copied from http://playground.arduino.cc/Main/DHT11Lib
  */
@@ -206,19 +208,20 @@ void measureAndProcess() {
   
   logString += String(stateFSM);
 
-  // open the file. note that only one file can be open at a time,
-  // so you have to close this one before opening another.
-  File dataFile = SD.open("temphum.txt", FILE_WRITE);
+  if (SD_present){
+    // open the file. note that only one file can be open at a time,
+    // so you have to close this one before opening another.
+    File dataFile = SD.open("temphum.txt", FILE_WRITE);
 
-
-  // if the file is available, write to it:
-  if (dataFile) {
-    dataFile.println(logString);
-    dataFile.close();
-  }
-  // if the file isn't open, pop up an error:
-  else {
-    lcd.print("SD error");
+    // if the file is available, write to it:
+    if (dataFile) {
+      dataFile.println(logString);
+      dataFile.close();
+    }
+    // if the file isn't open, pop up an error:
+    else {
+      lcd.print("SD error");
+    }
   }
   
 }
@@ -229,8 +232,10 @@ void setup() {
   // see if the card is present and can be initialized:
   if (!SD.begin(chipSelect)) {
     lcd.print("SD Card failed");
+    SD_present = false;
     return;
   }
+  SD_present = true;
   lcd.print("card initialized.");
 
   // enable DHT11 sensors
