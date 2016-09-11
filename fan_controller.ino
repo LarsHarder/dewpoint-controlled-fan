@@ -233,7 +233,6 @@ void setup() {
   if (!SD.begin(chipSelect)) {
     lcd.print("SD Card failed");
     SD_present = false;
-    return;
   }
   SD_present = true;
   lcd.print("card initialized.");
