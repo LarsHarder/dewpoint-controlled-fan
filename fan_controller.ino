@@ -56,8 +56,19 @@ DHT dht2(DHTPIN2, DHTTYPE);
 // initialize the library with the numbers of the interface pins
 LiquidCrystal lcd(7, 6, 5, 4, 1, 0);
 
+float temperatureInterior, temperatureExterior;
+float humidityInterior, humidityExterior;
+float dewpointInterior, dewpointExterior;
 
+bool errorSensorInterior, errorSensorExterior;
+bool errorSDCard;
+
+bool handleInterrupt;  // tells main loop that one minute is up
+
+#define LOGINTERVAL 10  // log every 10 minutes
 bool SD_present=false;
+
+int stateFSM;
 
 /*
  * copied from http://playground.arduino.cc/Main/DHT11Lib
@@ -272,133 +283,150 @@ void writeTimestampToSD(File datafile){
     If dewpoint of exterior is at least 5°C lower then the dewpoint of the inside fans are enabled (state = 1).
     If dewpoint of exterior raises above 2°C lower the the dewpoint of the inside fans are disabled (state = 0).
  */
-int FSM_fan_control(float dewpointInterior, float dewpointExterior){
-  static int state=0;
-
-  switch (state){
+void FSM_fan_control(float dewpointInterior, float dewpointExterior){
+  switch (stateFSM){
     case 0:
       if ((dewpointInterior - dewpointExterior) >= 5){  
         // switch fans on
-        state = 1;
+        stateFSM = 1;
         digitalWrite(FANPIN, HIGH);
       }
       break;
     case 1:
       if ((dewpointInterior - dewpointExterior) < 2){
         // switch fans off
-        state = 0;
+        stateFSM = 0;
         digitalWrite(FANPIN, LOW);
       }
       break;
   }
-  return state;
 }
 
-/*
-    monolythic function to be split up...
- */
-void measureAndProcess() {
-  String dataString = "";
-  String logString = "";
-  bool errorDHT1;
-  bool errorDHT2;
-  int retryCounter = 0;
-  char charVal[12];
-  float humidityInterior, humidityExterior;
-  float temperatureInterior, temperatureExterior;
-  float dewpointInterior, dewpointExterior;
-  int stateFSM;
 
-  while (retryCounter <= 9){
-    delay(2000);
-    errorDHT1 = false;
-    humidityInterior = dht.readHumidity();
-    temperatureInterior = dht.readTemperature();
 
-    // check for error in reading DHT11
-    if (isnan(humidityInterior) ||isnan(temperatureInterior)){
-      errorDHT1 = true;      
-      retryCounter ++;
-     } else break;
+
+
+
+void takeMeasurements(){
+  float temperature, humidity;
+  int retryCounter;
+
+  // update data from interior sensor 
+  for (retryCounter = 0; retryCounter<10; retryCounter++)
+  {
+    
+    errorSensorInterior = false;
+    temperature = dht.readTemperature();
+    humidity = dht.readHumidity();
+    if (isnan(temperature) || isnan(humidity)){
+      errorSensorInterior = true;
+      delay(1000);
+    } else {
+      noInterrupts();  // prevent interrupts while updating stored sensor readings
+      temperatureInterior = temperature;
+      humidityInterior = humidity;
+      dewpointInterior = dewPoint(temperatureInterior, humidityInterior);
+      interrupts();
+      break;
+    }
   }
 
-  
-  dtostrf(temperatureInterior, 3, 0, charVal);
+  // update data from exterior sensor
+  for (retryCounter = 0; retryCounter<10; retryCounter++)
+  {
+    errorSensorExterior = false;
+    temperature = dht.readTemperature();
+    humidity = dht.readHumidity();
+    if (isnan(temperature) || isnan(humidity)){
+      errorSensorExterior = true;
+      delay(1000);
+    } else {
+      noInterrupts();  // prevent interrupts while updating stored sensor readings
+      temperatureExterior = temperature;
+      humidityExterior = humidity;
+      dewpointExterior = dewPoint(temperatureExterior, humidityExterior);
+      interrupts();
+      break;
+    }
+  }
+}
+
+
+/*
+    display measurements from sensors on LCD
+*/
+void displayMeasurements(){
+  String dataString = "";
+  char buffer[12];
+
+  // data from interior sensor
+  dtostrf(temperatureInterior, 3, 0, buffer);
   dataString = "I ";
-  dataString += charVal;
+  dataString += buffer;
   dataString +="C ";
 
-  dtostrf(humidityInterior,3,0, charVal);
-  dataString += charVal;
+  dtostrf(humidityInterior,3,0, buffer);
+  dataString += buffer;
   dataString += "% ";
 
-  dewpointInterior = dewPoint(temperatureInterior, humidityInterior);
-  dtostrf(dewpointInterior,3,0, charVal);
-  dataString += charVal;
-  dataString += " ";
-
-
-  dtostrf(temperatureInterior, 6, 2, charVal);
-  logString += charVal;
-  logString += ", ";
-  dtostrf(humidityInterior, 6, 2, charVal);
-  logString += charVal;
-  logString += ", ";
+  dtostrf(dewpointInterior,3,0, buffer);
+  dataString += buffer;
+  
+  if (errorSensorInterior){
+    dataString += "E";
+  } else {
+    dataString += " ";
+  }
+  
 
   lcd.setCursor(0,0);
-  if (errorDHT1){
-    //lcd.print("I dht11 error     ");  
-    lcd.print(dataString);
-  } else {
-    lcd.print(dataString);
-  }
-  
-
-  lcd.setCursor(0, 1);
-
-  errorDHT2 = false;
-  // Reading temperature or humidity takes about 250 milliseconds!
-  // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
-  humidityExterior = dht2.readHumidity();
-  // Read temperature as Celsius (the default)
-  temperatureExterior = dht2.readTemperature();
-
-  if (isnan(humidityExterior) ||isnan(temperatureExterior)){
-    errorDHT2 = true;
-    //lcd.print("dht11 error     ");
-  }
-
-  dtostrf(temperatureExterior, 3, 0, charVal);
-  dataString = "A ";
-  dataString += charVal;
-  dataString +="C ";
-
-  dtostrf(humidityExterior, 3, 0, charVal);
-  dataString += charVal;
-  dataString += "% ";
-
-  dewpointExterior =  dewPoint(temperatureExterior, humidityExterior);
-  dtostrf(dewpointExterior, 3, 0, charVal);
-  dataString += charVal;
-  dataString += " ";
-  
   lcd.print(dataString);
 
-  
-  dtostrf(temperatureExterior, 6, 2, charVal);
-  logString += charVal;
+  // data from exterior sensor
+  dtostrf(temperatureExterior, 3, 0, buffer);
+  dataString = "A ";
+  dataString += buffer;
+  dataString +="C ";
+
+  dtostrf(humidityExterior, 3, 0, buffer);
+  dataString += buffer;
+  dataString += "% ";
+
+  dtostrf(dewpointExterior, 3, 0, buffer);
+  dataString += buffer;
+
+  if (errorSensorExterior){
+    dataString += "E";
+  } else {
+    dataString += " ";
+  }
+
+  lcd.setCursor(0,1);
+  lcd.print(dataString);
+}
+
+
+void logDataToSD(){
+  String logString = "";
+  char buffer[12];
+
+  dtostrf(temperatureInterior, 6, 2, buffer);
+  logString += buffer;
   logString += ", ";
-  dtostrf(humidityExterior, 6, 2, charVal);
-  logString += charVal;
+  dtostrf(humidityInterior, 6, 2, buffer);
+  logString += buffer;
   logString += ", ";
 
-  if (!(errorDHT1 || errorDHT2)){
-    stateFSM = FSM_fan_control(dewpointInterior, dewpointExterior);
-  }
-  
+  dtostrf(temperatureExterior, 6, 2, buffer);
+  logString += buffer;
+  logString += ", ";
+  dtostrf(humidityExterior, 6, 2, buffer);
+  logString += buffer;
+  logString += ", ";
+
   logString += String(stateFSM);
 
-  if (SD_present && !(errorDHT1 || errorDHT2)){
+  if (SD_present){
     // open the file. note that only one file can be open at a time,
     // so you have to close this one before opening another.
     File dataFile = SD.open("temphum.txt", FILE_WRITE);
@@ -409,12 +437,25 @@ void measureAndProcess() {
       dataFile.println(logString);
       dataFile.close();
     }
-    // if the file isn't open, pop up an error:
+    // if the file isn't open, set an error:
     else {
-      //lcd.print("SD error");
+      errorSDCard = true;
     }
-  }
+  }  
+}
 
+
+void measureAndProcess(){
+  takeMeasurements();
+  displayMeasurements();
+  FSM_fan_control(dewpointInterior, dewpointExterior);
+  logDataToSD();
+  resetAlarm();
+}
+
+void minuteInterruptHandler(){
+  handleInterrupt = true;  // tell main loop that one minute is up
+  // reset Alarm on RTC
   resetAlarm();
 }
 
@@ -450,6 +491,9 @@ void setup() {
   // enable Interrupt on Pin 2
   pinMode(INTPIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(INTPIN), measureAndProcess, FALLING);
+
+  handleInterrupt = false;
+  stateFSM = 0;
 
   lcd.write("!");
 }
