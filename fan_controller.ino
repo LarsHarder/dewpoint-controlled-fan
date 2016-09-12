@@ -335,8 +335,8 @@ void takeMeasurements(){
   for (retryCounter = 0; retryCounter<10; retryCounter++)
   {
     errorSensorExterior = false;
-    temperature = dht.readTemperature();
-    humidity = dht.readHumidity();
+    temperature = dht2.readTemperature();
+    humidity = dht2.readHumidity();
     if (isnan(temperature) || isnan(humidity)){
       errorSensorExterior = true;
       delay(1000);
