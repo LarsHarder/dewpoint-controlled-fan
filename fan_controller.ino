@@ -383,6 +383,7 @@ void displayMeasurements(){
   lcd.print(dataString);
 
   // data from exterior sensor
+  dataString = "";
   dtostrf(temperatureExterior, 3, 0, buffer);
   dataString = "A ";
   dataString += buffer;
