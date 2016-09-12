@@ -470,6 +470,40 @@ void displayStatus(){
   } else {
     lcd.write(" OK ");
   }
+
+  // read time (hh,mm)
+  byte second, minute, hour, temp;
+  byte errorcode;
+  char timeString[6];
+
+  Wire.beginTransmission( DS1337ADDRESS );
+  Wire.write( 0 ); // register of second
+  errorcode = Wire.endTransmission();
+  if (errorcode != 0){
+  }
+
+  Wire.requestFrom(DS1337ADDRESS, 2);
+  second = Wire.read();
+  minute = Wire.read();
+  hour = Wire.read();  
+  errorcode = Wire.endTransmission();
+
+  // convert hours and minutes from bcd to string
+  temp = hour & 0b00110000;
+  timeString[0]= '0' + (temp >> 4);
+  timeString[1]= '0' + ( hour & 0b00001111);
+  timeString[2]= ':';
+  temp = minute & 0b01110000;
+  timeString[3]= '0' + (temp >> 4);
+  timeString[4]= '0' + ( minute & 0b00001111);
+  timeString[5]= ':';
+  temp = second & 0b01110000;
+  timeString[6]= '0' + (temp >> 4);
+  timeString[7]= '0' + ( second & 0b00001111);
+  timeString[8]= 0;
+  
+  // print time 
+  lcd.write(timeString);
 }
 
 void measureAndProcess(){
