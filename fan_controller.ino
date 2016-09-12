@@ -445,6 +445,32 @@ void logDataToSD(){
 }
 
 
+/*
+    display errors of sensors and sd-card
+*/
+void displayStatus(){
+  lcd.clear();
+  lcd.write("Int:");
+  if (errorSensorInterior){
+    lcd.write("ERR ");
+  } else {
+    lcd.write(" OK ");
+  }
+  lcd.write("Ext:");
+  if (errorSensorExterior){
+    lcd.write("ERR ");
+  } else {
+    lcd.write(" OK ");
+  }  
+  lcd.setCursor(0,1);
+  lcd.write("SD:");
+  if (errorSDCard){
+    lcd.write("ERR ");
+  } else {
+    lcd.write(" OK ");
+  }
+}
+
 void measureAndProcess(){
   takeMeasurements();
   displayMeasurements();
