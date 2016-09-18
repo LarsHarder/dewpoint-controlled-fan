@@ -527,9 +527,10 @@ void setup() {
   if (!SD.begin(chipSelect)) {
     lcd.print("SD Card failed");
     SD_present = false;
+  } else {
+    SD_present = true;
+    lcd.print("card initialized.");
   }
-  SD_present = true;
-  lcd.print("card initialized.");
 
   // enable DHT11 sensors
   dht.begin();
